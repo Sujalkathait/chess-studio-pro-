@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Color, FENChar, MoveList as MoveListType, pieceImagePaths } from '../chess-logic/models';
+import { Color, FENChar, MoveList as MoveListType } from '../chess-logic/models';
 import {
   ChevronsLeft,
   ChevronLeft,
@@ -8,6 +8,10 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react';
+import { CapturedPieces } from './CapturedPieces/CapturedPieces';
+import { DIFFICULTY_LEVEL_MAP } from '../config/engine.config';
+
+import { PieceSetId } from '../config/theme.config';
 
 interface MoveListProps {
   moveList: MoveListType;
@@ -17,6 +21,10 @@ interface MoveListProps {
   playerColor: Color;
   gameOverMessage?: string;
   isAiThinking?: boolean;
+  boardView: (FENChar | null)[][];
+  computerLevel?: number;
+  gameMode?: 'friend' | 'computer' | 'online';
+  pieceSet?: PieceSetId;
 }
 
 export const MoveList: React.FC<MoveListProps> = ({
@@ -26,11 +34,16 @@ export const MoveList: React.FC<MoveListProps> = ({
   onNavigateHistory,
   playerColor,
   gameOverMessage,
-  isAiThinking,
+  isAiThinking = false,
+  boardView,
+  computerLevel = 2,
+  gameMode = 'computer',
+  pieceSet = 'cburnett',
 }) => {
   const activeMoveRef = useRef<HTMLDivElement | null>(null);
+  const currentEngineConfig = DIFFICULTY_LEVEL_MAP[computerLevel] || DIFFICULTY_LEVEL_MAP[2];
 
-  // Auto-scroll to active move
+  // Auto-scroll to active move in history
   useEffect(() => {
     if (activeMoveRef.current) {
       activeMoveRef.current.scrollIntoView({
@@ -41,41 +54,57 @@ export const MoveList: React.FC<MoveListProps> = ({
   }, [gameHistoryPointer]);
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col h-[560px] max-w-sm w-full backdrop-blur-sm">
-      {/* Header with Turn Status */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div
-            className={`w-4 h-4 rounded-full border shadow-sm transition-transform ${
-              playerColor === Color.White
-                ? 'bg-white border-slate-300'
-                : 'bg-slate-950 border-slate-600'
-            }`}
-          />
-          <div>
-            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
-              {gameOverMessage ? (
-                <span className="text-amber-400 font-semibold">Match Finished</span>
-              ) : isAiThinking ? (
-                <span className="text-indigo-400 flex items-center gap-1 animate-pulse">
-                  <Sparkles className="w-3.5 h-3.5" /> Stockfish Thinking...
-                </span>
-              ) : (
-                <span>{playerColor === Color.White ? "White's Turn" : "Black's Turn"}</span>
-              )}
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              {gameOverMessage
-                ? gameOverMessage
-                : `Move ${Math.floor(gameHistoryPointer / 2) + 1}`}
-            </p>
+    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col h-[350px] lg:h-[560px] w-full backdrop-blur-sm">
+      {/* Header with Turn / AI Status */}
+      <div className="pb-3 border-b border-slate-800 mb-2">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-3.5 h-3.5 rounded-full border shadow-sm transition-transform ${
+                playerColor === Color.White
+                  ? 'bg-white border-slate-300'
+                  : 'bg-slate-950 border-slate-600'
+              }`}
+            />
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
+                {gameOverMessage ? (
+                  <span className="text-amber-400 font-semibold">Match Concluded</span>
+                ) : isAiThinking ? (
+                  <span className="text-indigo-400 flex items-center gap-1.5 animate-pulse font-semibold">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                    <span>AI is thinking...</span>
+                  </span>
+                ) : (
+                  <span>{playerColor === Color.White ? "White's Turn" : "Black's Turn"}</span>
+                )}
+              </h3>
+            </div>
+          </div>
+
+          <div className="px-2.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-xs font-semibold text-slate-300 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-slate-400" />
+            <span>{moveList.length} Moves</span>
           </div>
         </div>
 
-        <div className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 text-slate-400" />
-          <span>{moveList.length} Moves</span>
-        </div>
+        {/* AI Limit Indicator banner when in computer mode */}
+        {gameMode === 'computer' && (
+          <div className="flex items-center justify-between text-[11px] px-2.5 py-1 rounded-lg bg-slate-950/70 border border-slate-800/80 text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+              <span>Limit: <strong>{currentEngineConfig.name}</strong></span>
+            </span>
+            <span className="font-mono text-slate-300">
+              max {currentEngineConfig.movetime}ms / depth {currentEngineConfig.depth}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Captured Pieces Material Tracker */}
+      <div className="mb-3">
+        <CapturedPieces boardView={boardView} pieceSet={pieceSet} />
       </div>
 
       {/* History Navigation Controls */}
@@ -115,7 +144,7 @@ export const MoveList: React.FC<MoveListProps> = ({
       </div>
 
       {/* Scrollable Move History Table */}
-      <div className="flex-1 overflow-y-auto pr-1 space-y-1 select-none">
+      <div className="flex-1 overflow-y-auto pr-1 space-y-1 select-none scrollbar-thin scrollbar-thumb-slate-700">
         {moveList.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
             <span className="text-3xl mb-2">♟️</span>
@@ -171,10 +200,12 @@ export const MoveList: React.FC<MoveListProps> = ({
       </div>
 
       {/* Footer shortcut helper */}
-      <div className="pt-3 mt-2 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
-        <span>Shortcut: Left / Right arrows</span>
-        <span className="text-slate-400 font-mono">v1.0</span>
+      <div className="pt-2.5 mt-2 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+        <span>Shortcuts: ← / → keys</span>
+        <span className="text-slate-400 font-mono">Chess Studio Pro</span>
       </div>
     </div>
   );
 };
+
+export default MoveList;

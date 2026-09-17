@@ -36,7 +36,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md animate-fadeIn">
-      <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center overflow-hidden">
+      <div className="relative bg-slate-900 border border-slate-700/80 rounded-3xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center overflow-y-auto max-h-[95vh] hide-scrollbar">
         {/* Glow */}
         <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/20 rounded-full blur-2xl pointer-events-none" />
 

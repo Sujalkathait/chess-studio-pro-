@@ -7,17 +7,44 @@ export type OnlineMovePayload = {
   newX: number;
   newY: number;
   promotedPiece: FENChar | null;
+  from?: string;
+  to?: string;
+  promotion?: string;
 };
+
+export interface CreateRoomResponse {
+  success: boolean;
+  roomCode?: string;
+  displayCode?: string;
+  playerColor?: 'white' | 'black';
+  hasPin?: boolean;
+  message?: string;
+}
+
+export interface JoinRoomResponse {
+  success: boolean;
+  roomCode?: string;
+  displayCode?: string;
+  playerColor?: 'white' | 'black';
+  message?: string;
+  isLockedOut?: boolean;
+  requiresPin?: boolean;
+}
 
 class SocketService {
   private socket: Socket | null = null;
   private currentRoom: string | null = null;
+
   public serverUrl: string = (
     (import.meta as any).env?.VITE_BACKEND_URL ||
-    (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    (typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? 'http://localhost:4000'
       : 'https://chess-studio-pro-1.onrender.com')
-  ).trim().replace(/\/+$/, '');
+  )
+    .trim()
+    .replace(/\/+$/, '');
+
   public connect(): Socket {
     if (!this.socket) {
       this.socket = io(this.serverUrl, {
@@ -28,11 +55,11 @@ class SocketService {
       });
 
       this.socket.on('connect', () => {
-        console.log('📡 Connected to Chess Multiplayer Server:', this.socket?.id, 'at', this.serverUrl);
+        console.log('📡 Connected to Chess Multiplayer Server:', this.socket?.id);
       });
 
       this.socket.on('connect_error', (err) => {
-        console.warn('⚠️ Socket connection error to', this.serverUrl, ':', err.message);
+        console.warn('⚠️ Socket connection error:', err.message);
       });
 
       this.socket.on('disconnect', (reason) => {
@@ -51,31 +78,30 @@ class SocketService {
     return this.connect();
   }
 
-  public createRoom(): Promise<{ success: boolean; roomCode?: string; playerColor?: 'white' | 'black'; message?: string }> {
+  public createRoom(pin?: string): Promise<CreateRoomResponse> {
     const socket = this.connect();
 
     return new Promise((resolve) => {
-      // 25-second timeout to allow Render free tier to wake up
       const timer = setTimeout(() => {
         resolve({
           success: false,
-          message: `Server took too long to respond (${this.serverUrl}). If your Render backend was asleep, it may take ~30 seconds to wake up. Please click again now!`,
+          message: `Connection timed out (${this.serverUrl}). If the backend was asleep, please try again.`,
         });
-      }, 25000);
+      }, 20000);
 
-      socket.emit('create_room', (response: { success: boolean; roomCode: string; playerColor: 'white' | 'black' }) => {
+      socket.emit('create_room', { pin }, (response: CreateRoomResponse) => {
         clearTimeout(timer);
         if (response && response.success) {
-          this.currentRoom = response.roomCode;
+          this.currentRoom = response.roomCode || null;
           resolve(response);
         } else {
-          resolve({ success: false, message: 'Server failed to create room' });
+          resolve({ success: false, message: response?.message || 'Server failed to create room' });
         }
       });
     });
   }
 
-  public joinRoom(roomCode: string): Promise<{ success: boolean; roomCode?: string; playerColor?: 'white' | 'black'; message?: string }> {
+  public joinRoom(roomCode: string, pin?: string): Promise<JoinRoomResponse> {
     const socket = this.connect();
 
     return new Promise((resolve) => {
@@ -84,9 +110,9 @@ class SocketService {
           success: false,
           message: `Connection to backend server timed out (${this.serverUrl}).`,
         });
-      }, 5000);
+      }, 10000);
 
-      socket.emit('join_room', { roomCode }, (response: { success: boolean; roomCode?: string; playerColor?: 'white' | 'black'; message?: string }) => {
+      socket.emit('join_room', { roomCode, pin }, (response: JoinRoomResponse) => {
         clearTimeout(timer);
         if (response && response.success && response.roomCode) {
           this.currentRoom = response.roomCode;
@@ -101,18 +127,39 @@ class SocketService {
     this.socket.emit('send_move', { roomCode, move, fen });
   }
 
-  public notifyGameOver(roomCode: string, winner: 'white' | 'black' | 'draw', reason: string, movesCount: number, finalFen: string) {
+  public resign(roomCode: string) {
     if (!this.socket) return;
-    this.socket.emit('game_over', { roomCode, winner, reason, movesCount, finalFen });
+    this.socket.emit('resign', { roomCode });
   }
 
-  public leaveRoom() {
-    this.currentRoom = null;
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+  public offerDraw(roomCode: string) {
+    if (!this.socket) return;
+    this.socket.emit('offer_draw', { roomCode });
+  }
+
+  public respondDraw(roomCode: string, accept: boolean) {
+    if (!this.socket) return;
+    this.socket.emit('respond_draw', { roomCode, accept });
+  }
+
+  public requestRematch(roomCode: string) {
+    if (!this.socket) return;
+    this.socket.emit('request_rematch', { roomCode });
+  }
+
+  public acceptRematch(roomCode: string) {
+    if (!this.socket) return;
+    this.socket.emit('accept_rematch', { roomCode });
+  }
+
+  public leaveRoom(roomCode?: string) {
+    const targetRoom = roomCode || this.currentRoom;
+    if (this.socket && targetRoom) {
+      this.socket.emit('leave_room', { roomCode: targetRoom });
     }
+    this.currentRoom = null;
   }
 }
 
 export const socketService = new SocketService();
+export default socketService;

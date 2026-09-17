@@ -22,8 +22,24 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        'board': '0 20px 50px rgba(0, 0, 0, 0.4), 0 0 0 12px #2d3436',
-        'card': '0 10px 30px -5px rgba(0, 0, 0, 0.3)',
+        'board': '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 8px rgba(30, 41, 59, 0.8)',
+        'card': '0 10px 40px -10px rgba(0, 0, 0, 0.4)',
+        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.2s ease-out',
+        'slide-up': 'slideUp 0.3s ease-out',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        }
       }
     },
   },
