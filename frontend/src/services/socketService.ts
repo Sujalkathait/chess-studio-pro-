@@ -12,7 +12,7 @@ export type OnlineMovePayload = {
 class SocketService {
   private socket: Socket | null = null;
   private currentRoom: string | null = null;
-  public serverUrl: string = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:4000';
+  public serverUrl: string = ((import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:4000').trim().replace(/\/+$/, '');
 
   public connect(): Socket {
     if (!this.socket) {
@@ -20,7 +20,7 @@ class SocketService {
         transports: ['websocket', 'polling'],
         autoConnect: true,
         reconnectionAttempts: 5,
-        timeout: 8000,
+        timeout: 25000,
       });
 
       this.socket.on('connect', () => {
@@ -51,13 +51,13 @@ class SocketService {
     const socket = this.connect();
 
     return new Promise((resolve) => {
-      // 5-second timeout in case backend is unreachable
+      // 25-second timeout to allow Render free tier to wake up
       const timer = setTimeout(() => {
         resolve({
           success: false,
-          message: `Cannot connect to backend at ${this.serverUrl}. If deployed on Vercel, deploy your backend to Render and add VITE_BACKEND_URL.`,
+          message: `Server took too long to respond (${this.serverUrl}). If your Render backend was asleep, it may take ~30 seconds to wake up. Please click again now!`,
         });
-      }, 5000);
+      }, 25000);
 
       socket.emit('create_room', (response: { success: boolean; roomCode: string; playerColor: 'white' | 'black' }) => {
         clearTimeout(timer);

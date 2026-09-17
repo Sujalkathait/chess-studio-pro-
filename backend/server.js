@@ -227,10 +227,10 @@ io.on('connection', (socket) => {
 // -------------------------------------------------------------
 // Start Server
 // -------------------------------------------------------------
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`=============================================`);
-  console.log(`🚀 Chess Studio Backend listening on port ${PORT}`);
+  console.log(`🚀 Chess Studio Backend listening on port ${PORT} (0.0.0.0)`);
   console.log(`📡 WebSocket ready for live multiplayer`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+  console.log(`🌐 Health check: http://0.0.0.0:${PORT}/health`);
   console.log(`=============================================`);
 });
