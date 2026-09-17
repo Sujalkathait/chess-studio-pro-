@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Globe, Copy, Check, X, Loader2, ArrowRight, Sparkles } from 'lucide-react';
+import { Globe, Copy, Check, X, Loader2, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { socketService } from '../services/socketService';
 
 interface OnlineRoomModalProps {
   isOpen: boolean;
@@ -9,6 +10,8 @@ interface OnlineRoomModalProps {
   createdRoomCode: string | null;
   isWaitingForOpponent: boolean;
   joinError?: string | null;
+  createError?: string | null;
+  isCreating?: boolean;
 }
 
 export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
@@ -19,6 +22,8 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
   createdRoomCode,
   isWaitingForOpponent,
   joinError,
+  createError,
+  isCreating = false,
 }) => {
   const [tab, setTab] = useState<'create' | 'join'>('create');
   const [inputCode, setInputCode] = useState<string>('');
@@ -96,16 +101,34 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
         {tab === 'create' && (
           <div>
             {!createdRoomCode ? (
-              <div className="text-center py-4">
-                <p className="text-sm text-slate-300 mb-6">
-                  Create a private room, get a 6-letter room code, and share it with your friend to play. You will play as <strong className="text-white">White</strong>.
+              <div className="text-center py-2">
+                <p className="text-sm text-slate-300 mb-5">
+                  Create a private room, get a 6-letter room code, and share it with your friend. You will play as <strong className="text-white">White</strong>.
                 </p>
+
+                {createError && (
+                  <div className="mb-4 p-3 rounded-xl bg-red-950/60 border border-red-800/80 text-xs text-red-300 flex items-start gap-2 text-left">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <span>{createError}</span>
+                  </div>
+                )}
+
                 <button
                   onClick={onCreateRoom}
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                  disabled={isCreating}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                 >
-                  <Sparkles className="w-4 h-4" />
-                  Generate Room Code
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Connecting to Server...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Generate Room Code</span>
+                    </>
+                  )}
                 </button>
               </div>
             ) : (
@@ -158,7 +181,10 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
                 autoFocus
               />
               {joinError && (
-                <p className="text-xs text-red-400 mt-2 font-medium text-center">{joinError}</p>
+                <div className="mt-3 p-2.5 rounded-lg bg-red-950/60 border border-red-800/80 text-xs text-red-300 flex items-start gap-2 text-left">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{joinError}</span>
+                </div>
               )}
             </div>
 
@@ -176,6 +202,12 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
             </button>
           </form>
         )}
+
+        {/* Server connection indicator at bottom */}
+        <div className="mt-5 pt-3 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+          <span>Server:</span>
+          <span className="font-mono text-slate-400 truncate max-w-[200px]">{socketService.serverUrl}</span>
+        </div>
       </div>
     </div>
   );

@@ -52,6 +52,8 @@ export const App: React.FC = () => {
   const [onlinePlayerColor, setOnlinePlayerColor] = useState<Color | null>(null);
   const [isWaitingForOpponent, setIsWaitingForOpponent] = useState<boolean>(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [createRoomError, setCreateRoomError] = useState<string | null>(null);
+  const [isCreatingRoom, setIsCreatingRoom] = useState<boolean>(false);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
 
   // Modals
@@ -183,12 +185,22 @@ export const App: React.FC = () => {
 
   // Online Room Handlers
   const handleCreateOnlineRoom = async () => {
-    const res = await socketService.createRoom();
-    if (res.success) {
-      setCreatedRoomCode(res.roomCode);
-      setOnlineRoomCode(res.roomCode);
-      setOnlinePlayerColor(Color.White);
-      setIsWaitingForOpponent(true);
+    setIsCreatingRoom(true);
+    setCreateRoomError(null);
+    try {
+      const res = await socketService.createRoom();
+      if (res.success && res.roomCode) {
+        setCreatedRoomCode(res.roomCode);
+        setOnlineRoomCode(res.roomCode);
+        setOnlinePlayerColor(Color.White);
+        setIsWaitingForOpponent(true);
+      } else {
+        setCreateRoomError(res.message || 'Failed to create room.');
+      }
+    } catch (err: any) {
+      setCreateRoomError(err.message || 'Connection error');
+    } finally {
+      setIsCreatingRoom(false);
     }
   };
 
@@ -496,12 +508,17 @@ export const App: React.FC = () => {
 
       <OnlineRoomModal
         isOpen={isOnlineModalOpen}
-        onClose={() => setIsOnlineModalOpen(false)}
+        onClose={() => {
+          setIsOnlineModalOpen(false);
+          setCreateRoomError(null);
+        }}
         onCreateRoom={handleCreateOnlineRoom}
         onJoinRoom={handleJoinOnlineRoom}
         createdRoomCode={createdRoomCode}
         isWaitingForOpponent={isWaitingForOpponent}
         joinError={joinError}
+        createError={createRoomError}
+        isCreating={isCreatingRoom}
       />
 
       <PromotionModal
