@@ -1,5 +1,5 @@
 import { roomManager } from '../rooms/room_manager.js';
-import { saveMatchRecord } from '../supabaseClient.js';
+import { saveMatchRecord } from '../database/supabaseClient.js';
 
 export function setupSocketHandlers(io) {
   io.on('connection', (socket) => {

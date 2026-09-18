@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import { SERVER_CONFIG } from './config/server.config.js';
 import { setupSocketHandlers } from './websocket/socketHandler.js';
 import { roomManager } from './rooms/room_manager.js';
-import { getRecentMatches, saveGameRecord, getGameHistory } from './supabaseClient.js';
+import { getRecentMatches, saveGameRecord, getGameHistory } from './database/supabaseClient.js';
 
 dotenv.config();
 

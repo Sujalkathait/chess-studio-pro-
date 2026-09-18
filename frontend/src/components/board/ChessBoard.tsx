@@ -1,17 +1,17 @@
 import React from 'react';
-import { ChessBoard as ChessBoardEngine } from '../chess-logic/chess-board';
+import { ChessBoard as ChessBoardEngine } from '../../chess-logic/chess-board';
 import {
   CheckState,
   Coords,
   FENChar,
   LastMove,
-} from '../chess-logic/models';
+} from '../../chess-logic/models';
 import {
   BOARD_THEMES,
   BoardThemeId,
   PieceSetId,
   getPieceSvgPath,
-} from '../config/theme.config';
+} from '../../config/theme.config';
 
 interface ChessBoardProps {
   boardView: (FENChar | null)[][];

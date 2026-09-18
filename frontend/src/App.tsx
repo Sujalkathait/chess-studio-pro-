@@ -14,17 +14,19 @@ import { stockfishService, ChessMove } from './services/stockfish.service';
 import { socketService, OnlineMovePayload } from './services/socketService';
 import { apiService, GameRecord } from './services/api.service';
 import { generatePGN } from './chess-logic/pgn';
-import { Navbar } from './components/Navbar';
-import { ChessBoard } from './components/ChessBoard';
-import { MoveList } from './components/MoveList';
-import { GameHistoryView } from './components/History/GameHistoryView';
-import { AnalysisView } from './components/Analysis/AnalysisView';
-import { DifficultyModal } from './components/DifficultySelector/DifficultyModal';
-import { PromotionModal } from './components/PromotionModal';
-import { GameOverModal } from './components/GameOverModal';
-import { RoomCodeModal } from './components/RoomCode/RoomCodeModal';
-import { ExitConfirmModal } from './components/GameControls/ExitConfirmModal';
-import { ThemeModal } from './components/ThemeSelector/ThemeModal';
+import {
+  Navbar,
+  ChessBoard,
+  MoveList,
+  GameHistoryView,
+  AnalysisView,
+  DifficultyModal,
+  PromotionModal,
+  GameOverModal,
+  RoomCodeModal,
+  ExitConfirmModal,
+  ThemeModal,
+} from './components';
 import { BoardThemeId, PieceSetId } from './config/theme.config';
 
 export const App: React.FC = () => {

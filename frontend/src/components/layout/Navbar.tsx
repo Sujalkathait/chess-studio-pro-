@@ -13,8 +13,8 @@ import {
   Sparkles,
   Palette,
 } from 'lucide-react';
-import { Color } from '../chess-logic/models';
-import { ENGINE_CONFIG, DIFFICULTY_LEVEL_MAP } from '../config/engine.config';
+import { Color } from '../../chess-logic/models';
+import { ENGINE_CONFIG, DIFFICULTY_LEVEL_MAP } from '../../config/engine.config';
 
 interface NavbarProps {
   gameMode: 'friend' | 'computer' | 'online';

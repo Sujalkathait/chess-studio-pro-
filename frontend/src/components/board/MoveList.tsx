@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Color, FENChar, MoveList as MoveListType } from '../chess-logic/models';
+import { Color, FENChar, MoveList as MoveListType } from '../../chess-logic/models';
 import {
   ChevronsLeft,
   ChevronLeft,
@@ -8,10 +8,9 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react';
-import { CapturedPieces } from './CapturedPieces/CapturedPieces';
-import { DIFFICULTY_LEVEL_MAP } from '../config/engine.config';
-
-import { PieceSetId } from '../config/theme.config';
+import { CapturedPieces } from './CapturedPieces';
+import { DIFFICULTY_LEVEL_MAP } from '../../config/engine.config';
+import { PieceSetId } from '../../config/theme.config';
 
 interface MoveListProps {
   moveList: MoveListType;

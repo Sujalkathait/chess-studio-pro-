@@ -35,7 +35,7 @@ class SocketService {
   private socket: Socket | null = null;
   private currentRoom: string | null = null;
 
-  public serverUrl: string = 'https://chess-studio-pro-1.onrender.com';
+  public serverUrl: string = (import.meta.env.VITE_SOCKET_URL as string) || 'https://chess-studio-pro-1.onrender.com';
 
   public connect(): Socket {
     if (!this.socket) {

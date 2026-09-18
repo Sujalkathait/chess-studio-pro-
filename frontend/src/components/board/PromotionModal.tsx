@@ -1,6 +1,6 @@
 import React from 'react';
-import { Color, FENChar } from '../chess-logic/models';
-import { PieceSetId, getPieceSvgPath } from '../config/theme.config';
+import { Color, FENChar } from '../../chess-logic/models';
+import { PieceSetId, getPieceSvgPath } from '../../config/theme.config';
 
 interface PromotionModalProps {
   isOpen: boolean;

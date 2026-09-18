@@ -1,17 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { parsePGN, ParsedPGN } from '../../chess-logic/pgn';
-import { analysisService, GameAnalysisSummary, AnalysisResult, MoveClassification } from '../../services/analysis.service';
-import { ChessBoard } from '../ChessBoard';
-import { ChevronLeft, ChevronRight, Activity, ArrowLeft, Loader2, AlertTriangle, FastForward, Rewind } from 'lucide-react';
+import { analysisService, GameAnalysisSummary, MoveClassification } from '../../services/analysis.service';
+import { ChessBoard } from '../board/ChessBoard';
+import { ChevronLeft, ChevronRight, Activity, ArrowLeft, Loader2, FastForward, Rewind } from 'lucide-react';
 import { FENChar } from '../../chess-logic/models';
-import { BOARD_THEMES } from '../../config/board.config';
-import { PIECE_SETS } from '../../config/pieces.config';
+import { BoardThemeId, PieceSetId } from '../../config/theme.config';
 import { Chess } from 'chess.js';
 
 interface AnalysisViewProps {
   pgn: string;
-  boardTheme: typeof BOARD_THEMES[0];
-  pieceSet: typeof PIECE_SETS[0];
+  boardTheme: BoardThemeId;
+  pieceSet: PieceSetId;
   onBack: () => void;
 }
 
@@ -46,7 +45,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ pgn, boardTheme, pie
     return () => {
       analysisService.terminate();
     };
-  }, [pgn]);
+  }, [pgn, onBack]);
 
   const updateBoardFromFen = (fen: string) => {
     const chess = new Chess(fen);
@@ -145,7 +144,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ pgn, boardTheme, pie
             boardView={boardView}
             selectedSquare={null}
             safeSquares={[]}
-            lastMove={null}
+            lastMove={undefined}
             checkState={{ isInCheck: false, checkKingSquare: null }}
             isFlipped={false}
             onSquareClick={() => {}}
@@ -246,3 +245,5 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ pgn, boardTheme, pie
     </div>
   );
 };
+
+export default AnalysisView;
