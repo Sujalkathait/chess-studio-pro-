@@ -2,6 +2,7 @@ import { Color, FENChar } from '../chess-logic/models';
 import {
   DIFFICULTY_LEVEL_MAP,
   ENGINE_SAFETY_MARGIN_MS,
+  ENGINE_HARD_TIMEOUT_MS,
   DifficultyConfig,
 } from '../config/engine.config';
 
@@ -16,14 +17,29 @@ export type ChessMove = {
 
 export type EngineThinkingListener = (isThinking: boolean, searchId?: number) => void;
 
+/**
+ * Engine state machine:
+ *   idle → thinking → idle
+ *
+ * Transitions back to idle happen on:
+ *   - bestmove received
+ *   - safety timeout (soft stop → eventual bestmove)
+ *   - hard timeout (Worker terminated and respawned)
+ *   - Worker error / messageerror
+ *   - explicit cancelSearch()
+ */
+type EngineState = 'idle' | 'thinking';
+
 class StockfishEngineService {
   private worker: Worker | null = null;
   private isWorkerReady: boolean = false;
   private currentSearchId: number = 0;
-  private isThinking: boolean = false;
+  private engineState: EngineState = 'idle';
   private thinkingListeners: Set<EngineThinkingListener> = new Set();
   private pendingResolver: ((move: ChessMove | null) => void) | null = null;
+  private pendingSearchId: number = 0;
   private safetyTimer: ReturnType<typeof setTimeout> | null = null;
+  private hardTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.initWorker();
@@ -34,17 +50,18 @@ class StockfishEngineService {
    */
   public onThinkingChange(listener: EngineThinkingListener): () => void {
     this.thinkingListeners.add(listener);
-    listener(this.isThinking, this.currentSearchId);
+    listener(this.engineState === 'thinking', this.currentSearchId);
     return () => this.thinkingListeners.delete(listener);
   }
 
-  private setThinking(thinking: boolean, searchId?: number): void {
-    this.isThinking = thinking;
-    this.thinkingListeners.forEach((fn) => fn(thinking, searchId));
+  private setEngineState(state: EngineState, searchId?: number): void {
+    this.engineState = state;
+    const isThinking = state === 'thinking';
+    this.thinkingListeners.forEach((fn) => fn(isThinking, searchId));
   }
 
   public getIsThinking(): boolean {
-    return this.isThinking;
+    return this.engineState === 'thinking';
   }
 
   /**
@@ -72,6 +89,14 @@ class StockfishEngineService {
       this.worker.onerror = (err) => {
         console.warn('⚠️ Stockfish Worker error:', err);
         this.isWorkerReady = false;
+        // Resolve any pending promise so the UI never gets stuck
+        this.resolveAndReset(null);
+      };
+
+      // Handle deserialization errors on messages from the Worker
+      (this.worker as any).onmessageerror = () => {
+        console.warn('⚠️ Stockfish Worker messageerror');
+        this.resolveAndReset(null);
       };
 
       // UCI handshake
@@ -80,6 +105,21 @@ class StockfishEngineService {
       console.warn('⚠️ Could not spawn Stockfish Web Worker:', err);
       this.worker = null;
       this.isWorkerReady = false;
+    }
+  }
+
+  /**
+   * Safely resolve the pending promise with a value and reset state to idle.
+   * Idempotent — safe to call multiple times.
+   */
+  private resolveAndReset(move: ChessMove | null): void {
+    this.clearAllTimers();
+    const resolver = this.pendingResolver;
+    this.pendingResolver = null;
+    this.pendingSearchId = 0;
+    this.setEngineState('idle');
+    if (resolver) {
+      resolver(move);
     }
   }
 
@@ -102,31 +142,33 @@ class StockfishEngineService {
 
     // Best move response: "bestmove e7e5 ponder d2d4" or "bestmove e7e8q"
     if (line.startsWith('bestmove')) {
-      this.clearSafetyTimer();
+      // Guard: discard stale responses from a previous search
+      if (this.pendingSearchId !== this.currentSearchId) {
+        return;
+      }
+
       const parts = line.split(' ');
       const moveStr = parts[1];
 
-      const resolver = this.pendingResolver;
-      this.pendingResolver = null;
-      this.setThinking(false);
-
-      if (!resolver) return;
-
       if (!moveStr || moveStr === '(none)') {
-        resolver(null);
+        this.resolveAndReset(null);
         return;
       }
 
       // Convert UCI move string (e.g. "e2e4", "e7e8q")
       const parsedMove = this.parseUciMove(moveStr);
-      resolver(parsedMove);
+      this.resolveAndReset(parsedMove);
     }
   }
 
-  private clearSafetyTimer(): void {
+  private clearAllTimers(): void {
     if (this.safetyTimer) {
       clearTimeout(this.safetyTimer);
       this.safetyTimer = null;
+    }
+    if (this.hardTimer) {
+      clearTimeout(this.hardTimer);
+      this.hardTimer = null;
     }
   }
 
@@ -188,16 +230,18 @@ class StockfishEngineService {
    * Cancel any active calculation immediately
    */
   public cancelSearch(): void {
-    this.clearSafetyTimer();
-    if (this.worker && this.isThinking) {
+    this.clearAllTimers();
+    if (this.worker && this.engineState === 'thinking') {
       this.worker.postMessage('stop');
     }
-    if (this.pendingResolver) {
-      const resolver = this.pendingResolver;
-      this.pendingResolver = null;
+    // Resolve with null so no promise hangs
+    const resolver = this.pendingResolver;
+    this.pendingResolver = null;
+    this.pendingSearchId = 0;
+    this.setEngineState('idle');
+    if (resolver) {
       resolver(null);
     }
-    this.setThinking(false);
   }
 
   /**
@@ -228,10 +272,17 @@ class StockfishEngineService {
       return null;
     }
 
-    this.setThinking(true, searchId);
+    this.setEngineState('thinking', searchId);
 
     return new Promise<ChessMove | null>((resolve) => {
+      this.pendingSearchId = searchId;
       this.pendingResolver = (move) => {
+        // Stale-response guard: if searchId no longer matches, discard
+        if (searchId !== this.currentSearchId) {
+          resolve(null);
+          return;
+        }
+
         if (move && move.promotedPiece) {
           // Adjust promotion color to actual computer side
           if (computerColor === Color.Black) {
@@ -248,12 +299,31 @@ class StockfishEngineService {
       this.worker?.postMessage(`position fen ${fen}`);
       this.worker?.postMessage(`go movetime ${movetime} depth ${depth}`);
 
-      // 6. Hard safety timeout: if engine takes longer than movetime + safety margin, send 'stop'
+      // 6. Tier-1 safety timeout: send 'stop' to engine
       this.safetyTimer = setTimeout(() => {
-        if (this.currentSearchId === searchId && this.isThinking) {
+        if (this.currentSearchId === searchId && this.engineState === 'thinking') {
           this.worker?.postMessage('stop');
         }
       }, movetime + ENGINE_SAFETY_MARGIN_MS);
+
+      // 7. Tier-2 hard timeout: if still no bestmove, terminate Worker and resolve
+      this.hardTimer = setTimeout(() => {
+        if (this.currentSearchId === searchId && this.engineState === 'thinking') {
+          console.warn('⚠️ Stockfish hard timeout — terminating and respawning Worker.');
+          // Terminate the stuck Worker
+          if (this.worker) {
+            try {
+              this.worker.terminate();
+            } catch {}
+            this.worker = null;
+            this.isWorkerReady = false;
+          }
+          // Resolve the promise so UI is never stuck
+          this.resolveAndReset(null);
+          // Respawn a fresh Worker for the next request
+          this.initWorker();
+        }
+      }, movetime + ENGINE_SAFETY_MARGIN_MS + ENGINE_HARD_TIMEOUT_MS);
     });
   }
 

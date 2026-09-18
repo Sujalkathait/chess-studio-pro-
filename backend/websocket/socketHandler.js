@@ -13,9 +13,10 @@ export function setupSocketHandlers(io) {
       // Support callback as either 1st or 2nd arg
       const cb = typeof data === 'function' ? data : callback;
       const pin = (typeof data === 'object' && data?.pin) ? data.pin : null;
+      const playerName = (typeof data === 'object' && data?.playerName) ? data.playerName : 'White';
 
       try {
-        const roomData = roomManager.createRoom(socket.id, pin);
+        const roomData = roomManager.createRoom(socket.id, pin, playerName);
         socket.join(roomData.publicCode);
 
         if (typeof cb === 'function') {
@@ -25,8 +26,18 @@ export function setupSocketHandlers(io) {
             displayCode: roomData.displayCode,
             playerColor: roomData.playerColor,
             hasPin: roomData.hasPin,
+            createdAt: roomData.createdAt,
+            expiresAt: roomData.expiresAt,
           });
         }
+
+        // Set a timeout to emit room_expired to the creator if the room expires while waiting
+        setTimeout(() => {
+          const room = roomManager.roomsByUuid.get(roomData.id) || roomManager.getRoomByCode(roomData.publicCode);
+          if (room && roomManager.isRoomExpired(room) && room.status === 'waiting') {
+            socket.emit('room_expired');
+          }
+        }, roomData.expiresAt - Date.now());
       } catch (err) {
         console.error('Error creating room:', err.message);
         if (typeof cb === 'function') {
@@ -38,14 +49,15 @@ export function setupSocketHandlers(io) {
     // -------------------------------------------------------------
     // 2. Join 6-Digit Room with Rate Limiting & PIN validation
     // -------------------------------------------------------------
-    socket.on('join_room', ({ roomCode, pin }, callback) => {
-      const result = roomManager.joinRoom(clientIp, socket.id, roomCode, pin);
+    socket.on('join_room', ({ roomCode, pin, playerName = 'Black' }, callback) => {
+      const result = roomManager.joinRoom(clientIp, socket.id, roomCode, pin, playerName);
 
       if (!result.success) {
         if (typeof callback === 'function') {
           callback({
             success: false,
             message: result.error,
+            errorCode: result.errorCode,
             isLockedOut: result.isLockedOut,
             requiresPin: result.requiresPin,
           });
@@ -70,7 +82,9 @@ export function setupSocketHandlers(io) {
         roomCode: result.publicCode,
         displayCode: result.displayCode,
         whitePlayer: room.game.whitePlayer,
+        whitePlayerName: room.game.whitePlayerName,
         blackPlayer: room.game.blackPlayer,
+        blackPlayerName: room.game.blackPlayerName,
         fen: room.game.fen,
       });
     });
@@ -112,6 +126,9 @@ export function setupSocketHandlers(io) {
           finalFen: validation.newFen,
         });
 
+        // Mark room as finished when game is over
+        room.status = 'finished';
+
         // Persist match to database
         saveMatchRecord({
           roomCode: room.publicCode,
@@ -138,6 +155,9 @@ export function setupSocketHandlers(io) {
           movesCount: room.game.moves.length,
           finalFen: room.game.fen,
         });
+
+        // Mark room as finished
+        room.status = 'finished';
 
         saveMatchRecord({
           roomCode: room.publicCode,
@@ -178,6 +198,9 @@ export function setupSocketHandlers(io) {
             finalFen: room.game.fen,
           });
 
+          // Mark room as finished
+          room.status = 'finished';
+
           saveMatchRecord({
             roomCode: room.publicCode,
             winner: 'draw',
@@ -208,7 +231,9 @@ export function setupSocketHandlers(io) {
       room.game.resetForRematch();
       io.to(room.publicCode).emit('rematch_start', {
         whitePlayer: room.game.whitePlayer,
+        whitePlayerName: room.game.whitePlayerName,
         blackPlayer: room.game.blackPlayer,
+        blackPlayerName: room.game.blackPlayerName,
         fen: room.game.fen,
       });
     });
@@ -233,7 +258,14 @@ export function setupSocketHandlers(io) {
         socket.to(room.publicCode).emit('opponent_disconnected', {
           message: 'Your opponent disconnected.',
         });
-        // Grace period before removing abandoned room
+        
+        // If room is still waiting, delete immediately (no grace period needed)
+        if (room.status === 'waiting' && !room.game.blackPlayer) {
+          roomManager.deleteRoom(room);
+          return;
+        }
+
+        // Grace period before removing active abandoned room
         setTimeout(() => {
           const check = roomManager.roomsByUuid.get(room.id);
           if (check && (check.status === 'waiting' || check.status === 'active')) {

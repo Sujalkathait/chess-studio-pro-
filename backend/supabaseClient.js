@@ -20,7 +20,68 @@ if (supabaseUrl && supabaseKey) {
 }
 
 /**
- * Save a completed chess match record into Supabase PostgreSQL database
+ * Save a complete game (PGN + metadata) into Supabase PostgreSQL database
+ */
+export async function saveGameRecord({ whitePlayer, blackPlayer, result, gameMode, timeControl, aiDifficulty, movesCount, pgn }) {
+  if (!supabase) {
+    console.log(`[Demo/In-Memory Game Log] Mode: ${gameMode} | Result: ${result} | Moves: ${movesCount}`);
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('games')
+      .insert([
+        {
+          white_player: whitePlayer || 'White',
+          black_player: blackPlayer || 'Black',
+          result: result || '*',
+          game_mode: gameMode || 'unknown',
+          time_control: timeControl || null,
+          ai_difficulty: aiDifficulty || null,
+          moves_count: movesCount || 0,
+          pgn: pgn || '',
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select();
+
+    if (error) {
+      console.error('❌ Error saving game to Supabase:', error.message);
+      return null;
+    }
+
+    console.log('✅ Game saved to Supabase:', data[0]?.id);
+    return data[0];
+  } catch (err) {
+    console.error('❌ Unexpected Supabase write error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch game history from Supabase
+ */
+export async function getGameHistory(limit = 50, offset = 0) {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('games')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('❌ Error fetching game history:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Save a completed chess match record into Supabase PostgreSQL database (Legacy Online)
  */
 export async function saveMatchRecord({ roomCode, winner, reason, movesCount, finalFen }) {
   if (!supabase) {

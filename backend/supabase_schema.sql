@@ -18,16 +18,16 @@ WHERE status IN ('waiting', 'active');
 
 CREATE TABLE IF NOT EXISTS games (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
-    white_player VARCHAR(100) NOT NULL,
-    black_player VARCHAR(100) DEFAULT NULL,
-    fen TEXT NOT NULL DEFAULT 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    pgn TEXT DEFAULT '',
-    status VARCHAR(30) NOT NULL DEFAULT 'waiting',
-    result VARCHAR(30) DEFAULT NULL,
+    user_id UUID DEFAULT NULL, -- For future auth
+    white_player VARCHAR(100) NOT NULL DEFAULT 'White',
+    black_player VARCHAR(100) NOT NULL DEFAULT 'Black',
+    result VARCHAR(30) NOT NULL, -- "1-0", "0-1", "1/2-1/2", "*"
+    game_mode VARCHAR(30) NOT NULL, -- "computer", "friend", "online"
+    time_control VARCHAR(30) DEFAULT NULL,
+    ai_difficulty INT DEFAULT NULL,
     moves_count INT DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    pgn TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS matches (

@@ -78,7 +78,7 @@ class SocketService {
     return this.connect();
   }
 
-  public createRoom(pin?: string): Promise<CreateRoomResponse> {
+  public createRoom(playerName: string, pin?: string): Promise<CreateRoomResponse> {
     const socket = this.connect();
 
     return new Promise((resolve) => {
@@ -89,7 +89,7 @@ class SocketService {
         });
       }, 20000);
 
-      socket.emit('create_room', { pin }, (response: CreateRoomResponse) => {
+      socket.emit('create_room', { pin, playerName }, (response: CreateRoomResponse) => {
         clearTimeout(timer);
         if (response && response.success) {
           this.currentRoom = response.roomCode || null;
@@ -101,7 +101,7 @@ class SocketService {
     });
   }
 
-  public joinRoom(roomCode: string, pin?: string): Promise<JoinRoomResponse> {
+  public joinRoom(roomCode: string, playerName: string, pin?: string): Promise<JoinRoomResponse> {
     const socket = this.connect();
 
     return new Promise((resolve) => {
@@ -112,7 +112,7 @@ class SocketService {
         });
       }, 10000);
 
-      socket.emit('join_room', { roomCode, pin }, (response: JoinRoomResponse) => {
+      socket.emit('join_room', { roomCode, pin, playerName }, (response: JoinRoomResponse) => {
         clearTimeout(timer);
         if (response && response.success && response.roomCode) {
           this.currentRoom = response.roomCode;

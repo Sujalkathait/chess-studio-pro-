@@ -42,6 +42,27 @@ const lockoutRes = roomManager.joinRoom(testClient, 'fake-socket', '999998');
 if (!lockoutRes.isLockedOut) throw new Error('Client was not locked out after 5 failures');
 console.log(`✅ Rate limiter successfully locked out client after 5 failed attempts: "${lockoutRes.error}".\n`);
 
+// 3.5 Test Room Expiration & Status Lifecycle
+console.log('Test 3.5: Room Expiration & Lifecycle (New):');
+const expRoomData = roomManager.createRoom('socket-creator-1');
+const expRoom = roomManager.getRoomByCode(expRoomData.publicCode);
+// Fake expiry (make it 2 minutes old)
+expRoom.expiresAt = Date.now() - 120000;
+
+// Should return ROOM_EXPIRED
+const joinExpRes = roomManager.joinRoom('test-client-2', 'socket-joiner-1', expRoomData.publicCode);
+if (joinExpRes.errorCode !== 'ROOM_EXPIRED') throw new Error(`Expected ROOM_EXPIRED, got ${joinExpRes.errorCode}`);
+console.log(`✅ Correctly returned ROOM_EXPIRED for expired room.`);
+
+// The room should be deleted inline now
+const shouldBeNull = roomManager.getRoomByCode(expRoomData.publicCode);
+if (shouldBeNull !== null) throw new Error(`Expired room was not deleted inline during lookup.`);
+console.log(`✅ Expired room was deleted inline.`);
+
+const notFoundRes = roomManager.joinRoom('test-client-3', 'socket-joiner-2', '111111');
+if (notFoundRes.errorCode !== 'ROOM_NOT_FOUND') throw new Error(`Expected ROOM_NOT_FOUND, got ${notFoundRes.errorCode}`);
+console.log(`✅ Correctly returned ROOM_NOT_FOUND for nonexistent code.\n`);
+
 // 4. Test Authoritative Chess Move Validation
 console.log('Test 4: Authoritative Chess Validation (chess.js):');
 const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';

@@ -46,6 +46,10 @@ export class RoomManager {
       const code = String(randomNum).padStart(SERVER_CONFIG.ROOM_CODE_LENGTH, '0');
 
       // Server-side active-room collision prevention
+      const existingRoom = this.roomsByCode.get(code);
+      if (existingRoom && this.isRoomExpired(existingRoom)) {
+        this.deleteRoom(existingRoom);
+      }
       if (!this.roomsByCode.has(code)) {
         return code;
       }
@@ -106,12 +110,12 @@ export class RoomManager {
   /**
    * Create a new room with internal UUID and public 6-digit code
    */
-  createRoom(creatorSocketId, pin = null) {
+  createRoom(creatorSocketId, pin = null, creatorName = 'White') {
     const internalId = uuidv4();
     const publicCode = this.generateUniquePublicCode();
     const now = Date.now();
 
-    const game = new GameSession(internalId, creatorSocketId);
+    const game = new GameSession(internalId, creatorSocketId, creatorName);
 
     const room = {
       id: internalId, // Internal UUID (never exposed as room lookup)
@@ -120,7 +124,7 @@ export class RoomManager {
       game,
       status: 'waiting', // 'waiting' | 'active' | 'finished' | 'expired'
       createdAt: now,
-      expiresAt: now + SERVER_CONFIG.ROOM_TTL_MS,
+      expiresAt: now + SERVER_CONFIG.ROOM_WAITING_TTL_MS,
       lastActivity: now,
     };
 
@@ -134,13 +138,23 @@ export class RoomManager {
       displayCode: RoomManager.formatDisplayCode(publicCode),
       playerColor: 'white',
       hasPin: Boolean(room.pin),
+      createdAt: room.createdAt,
+      expiresAt: room.expiresAt,
     };
+  }
+
+  /**
+   * Helper to check if room is expired based on TTL
+   */
+  isRoomExpired(room) {
+    if (!room) return true;
+    return Date.now() > room.expiresAt;
   }
 
   /**
    * Join an existing room via 6-digit code and optional PIN
    */
-  joinRoom(clientKey, joinerSocketId, rawCode, enteredPin = null) {
+  joinRoom(clientKey, joinerSocketId, rawCode, enteredPin = null, joinerName = 'Black') {
     // 1. Check rate limits
     const rateCheck = this.checkRateLimit(clientKey);
     if (!rateCheck.allowed) {
@@ -156,21 +170,31 @@ export class RoomManager {
 
     // 3. Server-side lookup
     const room = this.roomsByCode.get(code);
-    if (!room || room.status === 'expired') {
+    if (!room) {
       this.recordFailedAttempt(clientKey);
-      return { success: false, error: 'Room not found or expired. Please check the code.' };
+      return { success: false, errorCode: 'ROOM_NOT_FOUND', error: 'Room not found. Please check the code.' };
+    }
+    
+    if (this.isRoomExpired(room)) {
+      this.deleteRoom(room);
+      this.recordFailedAttempt(clientKey);
+      return { success: false, errorCode: 'ROOM_EXPIRED', error: 'This room code has expired.' };
+    }
+    
+    if (room.status === 'finished') {
+      return { success: false, errorCode: 'ROOM_FINISHED', error: 'This game has already finished.' };
     }
 
     // 4. Check if already full
-    if (room.game.blackPlayer && room.game.blackPlayer !== joinerSocketId) {
-      return { success: false, error: 'Room is already full.' };
+    if (room.status === 'active' || (room.game.blackPlayer && room.game.blackPlayer !== joinerSocketId)) {
+      return { success: false, errorCode: 'ROOM_FULL', error: 'Room is already full.' };
     }
 
     // 5. Check optional PIN
     if (room.pin) {
       if (!enteredPin || String(enteredPin).trim() !== room.pin) {
         this.recordFailedAttempt(clientKey);
-        return { success: false, error: 'Incorrect room PIN.', requiresPin: true };
+        return { success: false, errorCode: 'INVALID_PIN', error: 'Incorrect room PIN.', requiresPin: true };
       }
     }
 
@@ -179,10 +203,11 @@ export class RoomManager {
 
     // Assign second player as Black
     room.game.blackPlayer = joinerSocketId;
+    room.game.blackPlayerName = joinerName;
     room.game.start();
     room.status = 'active';
     room.lastActivity = Date.now();
-    room.expiresAt = Date.now() + SERVER_CONFIG.ROOM_TTL_MS;
+    room.expiresAt = Date.now() + SERVER_CONFIG.ROOM_ACTIVE_TTL_MS;
 
     console.log(`⚔️ Player ${joinerSocketId} joined room ${code} as Black`);
 
@@ -201,7 +226,12 @@ export class RoomManager {
    */
   getRoomByCode(rawCode) {
     const code = RoomManager.normalizeCode(rawCode);
-    return this.roomsByCode.get(code) || null;
+    const room = this.roomsByCode.get(code) || null;
+    if (room && this.isRoomExpired(room)) {
+      this.deleteRoom(room);
+      return null;
+    }
+    return room;
   }
 
   /**
@@ -222,7 +252,7 @@ export class RoomManager {
   touchRoom(room) {
     if (!room) return;
     room.lastActivity = Date.now();
-    room.expiresAt = Date.now() + SERVER_CONFIG.ROOM_TTL_MS;
+    room.expiresAt = Date.now() + SERVER_CONFIG.ROOM_ACTIVE_TTL_MS;
   }
 
   /**
@@ -244,6 +274,7 @@ export class RoomManager {
 
     for (const [id, room] of this.roomsByUuid.entries()) {
       if (now > room.expiresAt) {
+        room.status = 'expired';
         this.deleteRoom(room);
         cleaned += 1;
       }

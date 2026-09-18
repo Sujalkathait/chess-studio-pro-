@@ -5,8 +5,8 @@ import { socketService } from '../services/socketService';
 interface OnlineRoomModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateRoom: () => void;
-  onJoinRoom: (roomCode: string) => void;
+  onCreateRoom: (playerName: string) => void;
+  onJoinRoom: (roomCode: string, playerName: string) => void;
   createdRoomCode: string | null;
   isWaitingForOpponent: boolean;
   joinError?: string | null;
@@ -26,6 +26,7 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
   isCreating = false,
 }) => {
   const [tab, setTab] = useState<'create' | 'join'>('create');
+  const [playerName, setPlayerName] = useState<string>('');
   const [inputCode, setInputCode] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -38,10 +39,16 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCreate = () => {
+    if (playerName.trim()) {
+      onCreateRoom(playerName.trim());
+    }
+  };
+
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputCode.trim().length >= 4) {
-      onJoinRoom(inputCode.trim().toUpperCase());
+    if (inputCode.trim().length >= 4 && playerName.trim()) {
+      onJoinRoom(inputCode.trim().toUpperCase(), playerName.trim());
     }
   };
 
@@ -97,6 +104,23 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
           </div>
         )}
 
+        {/* Player Name Input (Shared across both tabs) */}
+        {!createdRoomCode && (
+          <div className="mb-6">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              Your Name
+            </label>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              placeholder="e.g. Magnus"
+              className="w-full text-center py-3 px-4 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+              autoFocus
+            />
+          </div>
+        )}
+
         {/* Tab 1: Create Room */}
         {tab === 'create' && (
           <div>
@@ -114,8 +138,8 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
                 )}
 
                 <button
-                  onClick={onCreateRoom}
-                  disabled={isCreating}
+                  onClick={handleCreate}
+                  disabled={isCreating || !playerName.trim()}
                   className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   {isCreating ? (
@@ -178,7 +202,6 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
                 onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                 placeholder="e.g. K9X2M1"
                 className="w-full text-center tracking-widest uppercase font-mono text-xl py-3 px-4 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                autoFocus
               />
               {joinError && (
                 <div className="mt-3 p-2.5 rounded-lg bg-red-950/60 border border-red-800/80 text-xs text-red-300 flex items-start gap-2 text-left">
@@ -194,7 +217,7 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
 
             <button
               type="submit"
-              disabled={inputCode.trim().length < 4}
+              disabled={inputCode.trim().length < 4 || !playerName.trim()}
               className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-40 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <span>Join Match</span>

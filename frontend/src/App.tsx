@@ -12,9 +12,13 @@ import {
 import { soundService } from './services/soundService';
 import { stockfishService, ChessMove } from './services/stockfish.service';
 import { socketService, OnlineMovePayload } from './services/socketService';
+import { apiService, GameRecord } from './services/api.service';
+import { generatePGN } from './chess-logic/pgn';
 import { Navbar } from './components/Navbar';
 import { ChessBoard } from './components/ChessBoard';
 import { MoveList } from './components/MoveList';
+import { GameHistoryView } from './components/History/GameHistoryView';
+import { AnalysisView } from './components/Analysis/AnalysisView';
 import { DifficultyModal } from './components/DifficultySelector/DifficultyModal';
 import { PromotionModal } from './components/PromotionModal';
 import { GameOverModal } from './components/GameOverModal';
@@ -26,6 +30,7 @@ import { BoardThemeId, PieceSetId } from './config/theme.config';
 export const App: React.FC = () => {
   // Engine reference
   const engineRef = useRef<ChessEngine>(new ChessEngine());
+  const hasSavedGame = useRef<boolean>(false);
 
   // Game UI state
   const [boardView, setBoardView] = useState<(FENChar | null)[][]>(() => engineRef.current.chessBoardView);
@@ -39,6 +44,10 @@ export const App: React.FC = () => {
   const [moveList, setMoveList] = useState<MoveListType>([]);
   const [gameHistory, setGameHistory] = useState<GameHistory>(() => engineRef.current.gameHistory);
   const [gameHistoryPointer, setGameHistoryPointer] = useState<number>(0);
+
+  // App Navigation
+  const [currentView, setCurrentView] = useState<'play' | 'history' | 'analysis'>('play');
+  const [analysisPgn, setAnalysisPgn] = useState<string | null>(null);
 
   // Settings & Modes
   const [gameMode, setGameMode] = useState<'friend' | 'computer' | 'online'>('computer');
@@ -54,11 +63,14 @@ export const App: React.FC = () => {
   const [onlineRoomCode, setOnlineRoomCode] = useState<string | null>(null);
   const [onlineDisplayCode, setOnlineDisplayCode] = useState<string | null>(null);
   const [onlinePlayerColor, setOnlinePlayerColor] = useState<Color | null>(null);
+  const [onlineWhiteName, setOnlineWhiteName] = useState<string>('White');
+  const [onlineBlackName, setOnlineBlackName] = useState<string>('Black');
   const [isWaitingForOpponent, setIsWaitingForOpponent] = useState<boolean>(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [createRoomError, setCreateRoomError] = useState<string | null>(null);
   const [isCreatingRoom, setIsCreatingRoom] = useState<boolean>(false);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
+  const [roomExpiresAt, setRoomExpiresAt] = useState<number | null>(null);
   const [isLockedOut, setIsLockedOut] = useState<boolean>(false);
   const [drawOfferedByOpponent, setDrawOfferedByOpponent] = useState<boolean>(false);
 
@@ -93,14 +105,14 @@ export const App: React.FC = () => {
     }
   };
 
-  // Subscribe to Stockfish Worker thinking state
+  // Subscribe to Stockfish Worker thinking state & cleanup on unmount
   useEffect(() => {
     const unsubscribe = stockfishService.onThinkingChange((thinking) => {
       setIsAiThinking(thinking);
     });
     return () => {
       unsubscribe();
-      stockfishService.cancelSearch();
+      stockfishService.terminate(); // Full Worker cleanup on unmount
     };
   }, []);
 
@@ -122,8 +134,38 @@ export const App: React.FC = () => {
     if (engine.isGameOver) {
       setIsGameOverModalOpen(true);
       stockfishService.cancelSearch();
+
+      if (!hasSavedGame.current) {
+        hasSavedGame.current = true;
+        
+        let result = "*";
+        if (engine.gameOverMessage?.includes("White won")) result = "1-0";
+        else if (engine.gameOverMessage?.includes("Black won")) result = "0-1";
+        else if (engine.gameOverMessage?.includes("Draw") || engine.gameOverMessage?.includes("Stalemate")) result = "1/2-1/2";
+
+        const pgn = generatePGN(engine.moveList, {
+          White: gameMode === 'computer' && computerConfig.color === Color.White ? `Stockfish Lv${computerConfig.level}` : (gameMode === 'online' ? onlineWhiteName : (playerColor === Color.White ? 'Player' : 'Player 2')),
+          Black: gameMode === 'computer' && computerConfig.color === Color.Black ? `Stockfish Lv${computerConfig.level}` : (gameMode === 'online' ? onlineBlackName : (playerColor === Color.Black ? 'Player' : 'Player 2')),
+          Result: result,
+          Event: `${gameMode} match`,
+        });
+
+        const gameRecord: GameRecord = {
+          white_player: gameMode === 'computer' && computerConfig.color === Color.White ? `Stockfish Lv${computerConfig.level}` : (gameMode === 'online' ? onlineWhiteName : (playerColor === Color.White ? 'Player' : 'Player 2')),
+          black_player: gameMode === 'computer' && computerConfig.color === Color.Black ? `Stockfish Lv${computerConfig.level}` : (gameMode === 'online' ? onlineBlackName : (playerColor === Color.Black ? 'Player' : 'Player 2')),
+          result: result,
+          game_mode: gameMode,
+          ai_difficulty: gameMode === 'computer' ? computerConfig.level : undefined,
+          moves_count: engine.moveList.length,
+          pgn: pgn
+        };
+
+        apiService.saveGame(gameRecord).then(saved => {
+          if (saved) console.log('✅ Auto-saved game record:', saved.id);
+        });
+      }
     }
-  }, []);
+  }, [gameMode, computerConfig, onlinePlayerColor]);
 
   // Start fresh game
   const startNewGame = useCallback(
@@ -152,7 +194,8 @@ export const App: React.FC = () => {
       } else {
         setIsFlipped(false);
       }
-
+      
+      hasSavedGame.current = false;
       syncFromEngine();
     },
     [gameMode, syncFromEngine]
@@ -198,10 +241,14 @@ export const App: React.FC = () => {
       roomCode,
       displayCode,
       whitePlayer,
+      whitePlayerName,
+      blackPlayerName,
     }: {
       roomCode: string;
       displayCode?: string;
       whitePlayer: string;
+      whitePlayerName: string;
+      blackPlayerName: string;
     }) => {
       console.log('⚔️ Game started in room:', roomCode);
       const isWhite = socket.id === whitePlayer;
@@ -210,6 +257,8 @@ export const App: React.FC = () => {
       setOnlineRoomCode(roomCode);
       setOnlineDisplayCode(displayCode || `${roomCode.slice(0, 3)} ${roomCode.slice(3)}`);
       setOnlinePlayerColor(assignedColor);
+      setOnlineWhiteName(whitePlayerName);
+      setOnlineBlackName(blackPlayerName);
       setIsWaitingForOpponent(false);
       setIsOnlineModalOpen(false);
       startNewGame('online', undefined, assignedColor);
@@ -247,9 +296,11 @@ export const App: React.FC = () => {
       alert('Your opponent declined the draw offer.');
     };
 
-    const onRematchStart = ({ whitePlayer }: { whitePlayer: string }) => {
+    const onRematchStart = ({ whitePlayer, whitePlayerName, blackPlayerName }: { whitePlayer: string; whitePlayerName: string; blackPlayerName: string }) => {
       const isWhite = socket.id === whitePlayer;
       const assignedColor = isWhite ? Color.White : Color.Black;
+      setOnlineWhiteName(whitePlayerName);
+      setOnlineBlackName(blackPlayerName);
       startNewGame('online', undefined, assignedColor);
     };
 
@@ -260,6 +311,14 @@ export const App: React.FC = () => {
     const onOpponentLeft = () => {
       alert('Your opponent left the game.');
       startNewGame('friend');
+    };
+
+    const onRoomExpired = () => {
+      setJoinError('Room code expired.');
+      setCreatedRoomCode(null);
+      setRoomExpiresAt(null);
+      setOnlineRoomCode(null);
+      setOnlineDisplayCode(null);
     };
 
     socket.on('game_start', onGameStart);
@@ -280,17 +339,19 @@ export const App: React.FC = () => {
       socket.off('rematch_start', onRematchStart);
       socket.off('opponent_disconnected', onOpponentDisconnected);
       socket.off('opponent_left', onOpponentLeft);
+      socket.off('room_expired', onRoomExpired);
     };
   }, [startNewGame, executeMove, syncFromEngine]);
 
   // Online Room Handlers
-  const handleCreateOnlineRoom = async (pin?: string) => {
+  const handleCreateOnlineRoom = async (playerName: string, pin?: string) => {
     setIsCreatingRoom(true);
     setCreateRoomError(null);
     try {
-      const res = await socketService.createRoom(pin);
+      const res = await socketService.createRoom(playerName, pin);
       if (res.success && res.roomCode) {
         setCreatedRoomCode(res.roomCode);
+        setRoomExpiresAt(res.expiresAt || null);
         setOnlineRoomCode(res.roomCode);
         setOnlineDisplayCode(res.displayCode || `${res.roomCode.slice(0, 3)} ${res.roomCode.slice(3)}`);
         setOnlinePlayerColor(Color.White);
@@ -305,10 +366,10 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleJoinOnlineRoom = async (code: string, pin?: string) => {
+  const handleJoinOnlineRoom = async (code: string, playerName: string, pin?: string) => {
     setJoinError(null);
     setIsLockedOut(false);
-    const res = await socketService.joinRoom(code, pin);
+    const res = await socketService.joinRoom(code, playerName, pin);
     if (res.success && res.roomCode) {
       setOnlineRoomCode(res.roomCode);
       setOnlineDisplayCode(res.displayCode || `${res.roomCode.slice(0, 3)} ${res.roomCode.slice(3)}`);
@@ -554,6 +615,8 @@ export const App: React.FC = () => {
     } else {
       const winner = playerColor === Color.White ? 'Black' : 'White';
       engineRef.current.gameOverMessage = `${playerColor === Color.White ? 'White' : 'Black'} resigned. ${winner} wins!`;
+      // Manually trigger gameOver in engine so the sync picks it up
+      (engineRef.current as any)._isGameOver = true;
       syncFromEngine();
       setIsGameOverModalOpen(true);
     }
@@ -628,6 +691,8 @@ export const App: React.FC = () => {
         onlineDisplayCode={onlineDisplayCode}
         isAiThinking={isAiThinking}
         isGameActive={isGameActive}
+        currentView={currentView}
+        onNavigateView={(view) => setCurrentView(view)}
       />
 
       {/* Draw Offer Notification Banner (Online) */}
@@ -656,45 +721,70 @@ export const App: React.FC = () => {
       )}
 
       {/* Main Play Arena */}
-      <main className="flex-1 w-full mx-auto px-2 sm:px-4 py-4 sm:py-6 flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-10">
-        {/* Chess Board Container */}
-        <div className="flex flex-col items-center justify-center w-full max-w-[95vw] sm:max-w-[560px] flex-shrink-0">
-          <ChessBoard
-            boardView={boardView}
-            selectedSquare={selectedSquare}
-            safeSquares={pieceSafeSquares}
-            lastMove={lastMove}
-            checkState={checkState}
-            isFlipped={isFlipped}
-            onSquareClick={handleSquareClick}
-            boardTheme={boardTheme}
-            pieceSet={pieceSet}
-            disabled={
-              isAiThinking ||
-              (gameMode === 'online' &&
-                onlinePlayerColor !== null &&
-                playerColor !== onlinePlayerColor)
-            }
-          />
-        </div>
+      {currentView === 'play' && (
+        <main className="flex-1 w-full mx-auto px-2 sm:px-4 py-4 sm:py-6 flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-10">
+          {/* Chess Board Container */}
+          <div className="flex flex-col items-center justify-center w-full max-w-[95vw] sm:max-w-[560px] flex-shrink-0">
+            <ChessBoard
+              boardView={boardView}
+              selectedSquare={selectedSquare}
+              safeSquares={pieceSafeSquares}
+              lastMove={lastMove}
+              checkState={checkState}
+              isFlipped={isFlipped}
+              onSquareClick={handleSquareClick}
+              boardTheme={boardTheme}
+              pieceSet={pieceSet}
+              disabled={
+                isAiThinking ||
+                (gameMode === 'online' &&
+                  onlinePlayerColor !== null &&
+                  playerColor !== onlinePlayerColor)
+              }
+            />
+          </div>
 
-        {/* Move History and Game Controls Panel */}
-        <div className="w-full max-w-[95vw] lg:w-[400px] flex-shrink-0 flex justify-center mb-6 lg:mb-0">
-          <MoveList
-            moveList={moveList}
-            gameHistoryPointer={gameHistoryPointer}
-            gameHistoryLength={gameHistory.length}
-            onNavigateHistory={handleNavigateHistory}
-            playerColor={playerColor}
-            gameOverMessage={gameOverMessage}
-            isAiThinking={isAiThinking}
-            boardView={boardView}
-            computerLevel={computerConfig.level}
-            gameMode={gameMode}
-            pieceSet={pieceSet}
-          />
-        </div>
-      </main>
+          {/* Move History and Game Controls Panel */}
+          <div className="w-full max-w-[95vw] lg:w-[400px] flex-shrink-0 flex justify-center mb-6 lg:mb-0">
+            <MoveList
+              moveList={moveList}
+              gameHistoryPointer={gameHistoryPointer}
+              gameHistoryLength={gameHistory.length}
+              onNavigateHistory={handleNavigateHistory}
+              playerColor={playerColor}
+              gameOverMessage={gameOverMessage}
+              isAiThinking={isAiThinking}
+              boardView={boardView}
+              computerLevel={computerConfig.level}
+              gameMode={gameMode}
+              pieceSet={pieceSet}
+            />
+          </div>
+        </main>
+      )}
+
+      {currentView === 'history' && (
+        <GameHistoryView 
+          onAnalyze={(pgn) => {
+            setAnalysisPgn(pgn);
+            setCurrentView('analysis');
+          }}
+          onReplay={(pgn) => {
+             // For replay we can implement later, for now route to analysis
+             setAnalysisPgn(pgn);
+             setCurrentView('analysis');
+          }}
+        />
+      )}
+
+      {currentView === 'analysis' && analysisPgn && (
+        <AnalysisView 
+          pgn={analysisPgn}
+          boardTheme={boardTheme}
+          pieceSet={pieceSet}
+          onBack={() => setCurrentView('history')}
+        />
+      )}
 
       {/* Footer */}
       <footer className="w-full py-3 text-center text-xs text-slate-500 border-t border-slate-900 bg-slate-950/70">
@@ -719,17 +809,23 @@ export const App: React.FC = () => {
         isOpen={isOnlineModalOpen}
         onClose={() => {
           setIsOnlineModalOpen(false);
+          setJoinError(null);
           setCreateRoomError(null);
         }}
         onCreateRoom={handleCreateOnlineRoom}
         onJoinRoom={handleJoinOnlineRoom}
         createdRoomCode={createdRoomCode}
+        roomExpiresAt={roomExpiresAt}
         displayCode={onlineDisplayCode}
         isWaitingForOpponent={isWaitingForOpponent}
         joinError={joinError}
         createError={createRoomError}
         isCreating={isCreatingRoom}
         isLockedOut={isLockedOut}
+        onRoomExpired={() => {
+          setCreatedRoomCode(null);
+          setRoomExpiresAt(null);
+        }}
       />
 
       <ExitConfirmModal

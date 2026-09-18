@@ -4,11 +4,13 @@ import { validateAndApplyMove } from './validator.js';
 export const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 export class GameSession {
-  constructor(roomId, whitePlayerId, blackPlayerId = null) {
+  constructor(roomId, whitePlayerId, whitePlayerName = 'White', blackPlayerId = null, blackPlayerName = 'Black') {
     this.id = uuidv4();
     this.roomId = roomId;
     this.whitePlayer = whitePlayerId;
+    this.whitePlayerName = whitePlayerName;
     this.blackPlayer = blackPlayerId;
+    this.blackPlayerName = blackPlayerName;
     this.fen = STARTING_FEN;
     this.pgn = '';
     this.moves = [];
@@ -146,10 +148,14 @@ export class GameSession {
   }
 
   resetForRematch() {
-    // Swap colors for rematch
+    // Swap colors and names for rematch
     const prevWhite = this.whitePlayer;
     this.whitePlayer = this.blackPlayer;
     this.blackPlayer = prevWhite;
+    
+    const prevWhiteName = this.whitePlayerName;
+    this.whitePlayerName = this.blackPlayerName;
+    this.blackPlayerName = prevWhiteName;
 
     this.fen = STARTING_FEN;
     this.pgn = '';

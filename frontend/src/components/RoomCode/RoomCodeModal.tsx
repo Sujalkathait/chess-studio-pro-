@@ -17,15 +17,17 @@ import { socketService } from '../../services/socketService';
 interface RoomCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateRoom: (pin?: string) => void;
-  onJoinRoom: (roomCode: string, pin?: string) => void;
+  onCreateRoom: (playerName: string, pin?: string) => void;
+  onJoinRoom: (roomCode: string, playerName: string, pin?: string) => void;
   createdRoomCode: string | null;
+  roomExpiresAt?: number | null;
   displayCode: string | null;
   isWaitingForOpponent: boolean;
   joinError?: string | null;
   createError?: string | null;
   isCreating?: boolean;
   isLockedOut?: boolean;
+  onRoomExpired?: () => void;
 }
 
 export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
@@ -40,13 +42,36 @@ export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
   createError,
   isCreating = false,
   isLockedOut = false,
+  roomExpiresAt,
+  onRoomExpired,
 }) => {
   const [tab, setTab] = useState<'create' | 'join'>('create');
   const [inputCode, setInputCode] = useState<string>('');
+  const [playerName, setPlayerName] = useState<string>('');
   const [inputPin, setInputPin] = useState<string>('');
   const [createPin, setCreatePin] = useState<string>('');
   const [enablePin, setEnablePin] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!roomExpiresAt || !isWaitingForOpponent) {
+      setTimeLeft(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const remaining = Math.max(0, Math.ceil((roomExpiresAt - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining === 0 && onRoomExpired) {
+        onRoomExpired();
+      }
+    };
+
+    updateTimer();
+    const intervalId = setInterval(updateTimer, 1000);
+    return () => clearInterval(intervalId);
+  }, [roomExpiresAt, isWaitingForOpponent, onRoomExpired]);
 
   if (!isOpen) return null;
 
@@ -58,11 +83,17 @@ export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCreate = () => {
+    if (playerName.trim()) {
+      onCreateRoom(playerName.trim(), enablePin && createPin ? createPin : undefined);
+    }
+  };
+
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = inputCode.replace(/\s+/g, '').trim();
-    if (cleanCode.length === 6) {
-      onJoinRoom(cleanCode, inputPin.trim() || undefined);
+    if (cleanCode.length === 6 && playerName.trim()) {
+      onJoinRoom(cleanCode, playerName.trim(), inputPin.trim() || undefined);
     }
   };
 
@@ -124,6 +155,23 @@ export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
           </div>
         )}
 
+        {/* Player Name Input (Shared across both tabs) */}
+        {!createdRoomCode && (
+          <div className="mb-6">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              Your Name
+            </label>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              placeholder="e.g. Magnus"
+              className="w-full text-center py-3 px-4 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+              autoFocus
+            />
+          </div>
+        )}
+
         {/* Tab 1: Create Room */}
         {tab === 'create' && (
           <div>
@@ -170,8 +218,8 @@ export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
                 )}
 
                 <button
-                  onClick={() => onCreateRoom(enablePin && createPin ? createPin : undefined)}
-                  disabled={isCreating}
+                  onClick={handleCreate}
+                  disabled={isCreating || !playerName.trim()}
                   className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   {isCreating ? (
@@ -216,6 +264,12 @@ export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
                   <span>Waiting for opponent to enter code...</span>
                 </div>
+                
+                {timeLeft !== null && (
+                  <div className={`text-xs font-semibold ${timeLeft <= 10 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+                    Room expires in: {timeLeft}s
+                  </div>
+                )}
 
                 <p className="text-xs text-slate-400">
                   Share this 6-digit code with your friend. The game will start instantly as soon as they join!
@@ -239,7 +293,6 @@ export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
                 onChange={handleInputChange}
                 placeholder="e.g. 004721"
                 className="w-full text-center tracking-widest font-mono text-2xl py-3 px-4 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                autoFocus
               />
               {inputCode.length === 6 && (
                 <div className="text-center mt-1 text-[11px] text-slate-400 font-mono">
@@ -286,7 +339,7 @@ export const RoomCodeModal: React.FC<RoomCodeModalProps> = ({
 
             <button
               type="submit"
-              disabled={inputCode.length !== 6 || isLockedOut}
+              disabled={inputCode.length !== 6 || isLockedOut || !playerName.trim()}
               className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-40 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <span>Join Match</span>

@@ -78,3 +78,4 @@ export const DIFFICULTY_LEVEL_MAP: Record<number, DifficultyConfig> = {
 };
 
 export const ENGINE_SAFETY_MARGIN_MS = 150; // Force-stop engine if response exceeds movetime + margin
+export const ENGINE_HARD_TIMEOUT_MS = 2000; // Terminate+respawn Worker if no bestmove after stop

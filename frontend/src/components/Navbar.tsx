@@ -34,6 +34,8 @@ interface NavbarProps {
   onlineDisplayCode?: string | null;
   isAiThinking?: boolean;
   isGameActive?: boolean;
+  currentView?: 'play' | 'history' | 'analysis';
+  onNavigateView?: (view: 'play' | 'history' | 'analysis') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -54,6 +56,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onlineDisplayCode,
   isAiThinking = false,
   isGameActive = false,
+  currentView = 'play',
+  onNavigateView = () => {},
 }) => {
   const currentLevelConfig = DIFFICULTY_LEVEL_MAP[computerLevel] || ENGINE_CONFIG.easy;
 
@@ -107,53 +111,82 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Mode Selector Tabs (Scrollable on mobile) */}
-        <div className="flex w-full md:w-auto overflow-x-auto hide-scrollbar items-center justify-start md:justify-center bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 gap-1.5">
-          <button
-            onClick={() => onSelectMode('computer')}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-              gameMode === 'computer'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Bot className="w-4 h-4 md:w-3.5 md:h-3.5" />
-            <span>vs Computer</span>
-            {gameMode === 'computer' && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-800 text-[10px] text-indigo-200">
-                {currentLevelConfig.name}
-              </span>
-            )}
-          </button>
+        {/* Center: Mode Selector Tabs or View Switcher */}
+        <div className="flex items-center gap-2">
+          {/* Mode Selector Tabs (Scrollable on mobile) - shown when in play view */}
+          {currentView === 'play' && (
+            <div className="flex w-full md:w-auto overflow-x-auto hide-scrollbar items-center justify-start md:justify-center bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 gap-1.5">
+              <button
+                onClick={() => onSelectMode('computer')}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  gameMode === 'computer'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Bot className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                <span>vs Computer</span>
+                {gameMode === 'computer' && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-800 text-[10px] text-indigo-200">
+                    {currentLevelConfig.name}
+                  </span>
+                )}
+              </button>
 
-          <button
-            onClick={() => onSelectMode('friend')}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-              gameMode === 'friend'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4 md:w-3.5 md:h-3.5" />
-            <span>Pass & Play</span>
-          </button>
+              <button
+                onClick={() => onSelectMode('friend')}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  gameMode === 'friend'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Users className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                <span>Pass & Play</span>
+              </button>
 
-          <button
-            onClick={() => onSelectMode('online')}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-              gameMode === 'online'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Globe className="w-4 h-4 md:w-3.5 md:h-3.5" />
-            <span>Online Room</span>
-            {gameMode === 'online' && onlineDisplayCode && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-800 text-[10px] text-emerald-200 font-mono font-bold">
-                {onlineDisplayCode}
-              </span>
-            )}
-          </button>
+              <button
+                onClick={() => onSelectMode('online')}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  gameMode === 'online'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Globe className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                <span>Online Room</span>
+                {gameMode === 'online' && onlineDisplayCode && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-800 text-[10px] text-emerald-200 font-mono font-bold">
+                    {onlineDisplayCode}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* View Navigation Switcher (Play vs History & Analysis) */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-2xl p-1.5">
+            <button
+              onClick={() => onNavigateView('play')}
+              className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                currentView === 'play'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Play
+            </button>
+            <button
+              onClick={() => onNavigateView('history')}
+              className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                currentView === 'history' || currentView === 'analysis'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              History & Analysis
+            </button>
+          </div>
         </div>
 
         {/* In-Game Actions & Settings (Scrollable on mobile) */}
