@@ -165,7 +165,7 @@ export const App: React.FC = () => {
         });
       }
     }
-  }, [gameMode, computerConfig, onlinePlayerColor]);
+  }, [gameMode, computerConfig, onlineWhiteName, onlineBlackName, playerColor]);
 
   // Start fresh game
   const startNewGame = useCallback(
@@ -657,7 +657,7 @@ export const App: React.FC = () => {
     startNewGame('friend');
   };
 
-  const isGameActive = moveList.length > 0 && !engineRef.current.isGameOver;
+  const isGameActive = moveList.length > 0 && gameOverMessage === undefined;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between overflow-x-hidden">
