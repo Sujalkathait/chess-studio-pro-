@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "cd backend && npm install",
-    "build": "cd backend && npm install",
-    "start": "cd backend && npm start",
-    "build:frontend": "cd frontend && npm install && npm run build"
+    "install": "npm run install:backend",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "build": "npm run build:frontend",
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "start": "cd backend && node server.js"
   }
 }
-
