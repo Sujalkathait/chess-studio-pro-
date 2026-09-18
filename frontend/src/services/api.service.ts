@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+const API_BASE_URL = 'https://chess-studio-pro-1.onrender.com';
 
 export interface GameRecord {
   id?: string;

@@ -35,15 +35,7 @@ class SocketService {
   private socket: Socket | null = null;
   private currentRoom: string | null = null;
 
-  public serverUrl: string = (
-    (import.meta as any).env?.VITE_BACKEND_URL ||
-    (typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:4000'
-      : 'https://chess-studio-pro-1.onrender.com')
-  )
-    .trim()
-    .replace(/\/+$/, '');
+  public serverUrl: string = 'https://chess-studio-pro-1.onrender.com';
 
   public connect(): Socket {
     if (!this.socket) {
